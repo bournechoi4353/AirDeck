@@ -3,3 +3,7 @@
 export { HandTrackingView } from './HandTrackingView';
 export { useHandTracking } from './useHandTracking';
 export type { TrackingStatus, HandTracking } from './useHandTracking';
+export { mirrorX, updateSwipeWindow, detectSwipe, wristX, detectPinch, detectPoint } from './detectors';
+export { createFSMState, stepFSM } from './gestureFSM';
+export type { FSMInternalState, FSMConfig, CooldownDurations } from './gestureFSM';
+export type { GestureName, GestureEvent, Landmark, SwipeWindow } from './types';
