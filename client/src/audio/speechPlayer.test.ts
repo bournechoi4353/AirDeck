@@ -28,21 +28,21 @@ beforeEach(() => {
 });
 
 describe('SpeechPlayer', () => {
-  it('exposes voice variants and lets you pick one', () => {
+  it('exposes voice options and lets you pick one', () => {
     const p = new SpeechPlayer();
     expect(p.voices().length).toBeGreaterThan(0);
-    expect(p.getVoice()).toBe('en');
-    p.setVoice('en+m3');
-    expect(p.getVoice()).toBe('en+m3');
+    expect(p.getVoice()).toBe('Samantha');
+    p.setVoice('Karen');
+    expect(p.getVoice()).toBe('Karen');
   });
 
   it('POSTs the text and selected voice to /api/tts', async () => {
     const p = new SpeechPlayer();
-    p.setVoice('en+f3');
+    p.setVoice('Daniel');
     await p.speak('hello world');
     expect(fetch).toHaveBeenCalledWith('/api/tts', expect.objectContaining({ method: 'POST' }));
     const init = vi.mocked(fetch).mock.calls[0][1];
-    expect(JSON.parse(String(init?.body))).toEqual({ text: 'hello world', voice: 'en+f3' });
+    expect(JSON.parse(String(init?.body))).toEqual({ text: 'hello world', voice: 'Daniel' });
   });
 
   it('ignores empty text', async () => {

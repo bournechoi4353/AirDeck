@@ -27,60 +27,77 @@ function makeLandmarks(overrides: Partial<Record<number, Partial<Landmark>>> = {
 const indexUp = (): Landmark[] => makeLandmarks({ 8: { y: 0.2 } });
 const pinkyUp = (): Landmark[] => makeLandmarks({ 20: { y: 0.2 } });
 
+// Feed a pose across a list of timestamps; return the first event that fires.
+function hold(landmarks: Landmark[], times: number[], holdMs?: number) {
+  let state = createFSMState();
+  for (const t of times) {
+    const r = stepFSM(state, landmarks, t, holdMs == null ? {} : { holdMs });
+    state = r.next;
+    if (r.event) return { state, event: r.event };
+  }
+  return { state, event: null };
+}
+
 describe('createFSMState', () => {
-  it('starts idle with no latched fingers', () => {
+  it('starts with no held poses', () => {
     const s = createFSMState();
-    expect(s.cooldownUntil).toBe(0);
-    expect(s.indexActive).toBe(false);
-    expect(s.pinkyActive).toBe(false);
+    expect(s.index).toEqual({ since: null, fired: false });
+    expect(s.pinky).toEqual({ since: null, fired: false });
   });
 });
 
-describe('stepFSM — basic detection', () => {
-  it('returns null for a closed fist', () => {
-    expect(stepFSM(createFSMState(), makeLandmarks(), 0).event).toBeNull();
+describe('hold-to-confirm', () => {
+  it('does not fire before the pose is held long enough', () => {
+    expect(hold(indexUp(), [0, 100, 200]).event).toBeNull(); // < 350ms default
   });
 
-  it('emits an index event when the index finger goes up', () => {
-    const { event, next } = stepFSM(createFSMState(), indexUp(), 1000);
-    expect(event?.type).toBe('index');
-    expect(next.indexActive).toBe(true);
+  it('fires index once the pose is held past the threshold', () => {
+    expect(hold(indexUp(), [0, 100, 200, 300, 400]).event?.type).toBe('index');
   });
 
-  it('emits a pinky event when the pinky finger goes up', () => {
-    const { event, next } = stepFSM(createFSMState(), pinkyUp(), 1000);
-    expect(event?.type).toBe('pinky');
-    expect(next.pinkyActive).toBe(true);
+  it('fires pinky after holding', () => {
+    expect(hold(pinkyUp(), [0, 200, 400]).event?.type).toBe('pinky');
   });
-});
 
-describe('finger poses are edge-triggered', () => {
-  it('fires once on raise and again only after lowering', () => {
+  it('a brief pose does not fire (no accidental slide change)', () => {
     let s = createFSMState();
-    let r = stepFSM(s, indexUp(), 1000);
-    s = r.next;
-    expect(r.event?.type).toBe('index');
-
-    r = stepFSM(s, indexUp(), 1100); // still in the short cooldown
-    s = r.next;
+    s = stepFSM(s, indexUp(), 0).next;
+    s = stepFSM(s, indexUp(), 150).next;
+    const r = stepFSM(s, makeLandmarks(), 200); // released before threshold
     expect(r.event).toBeNull();
+    expect(r.next.index).toEqual({ since: null, fired: false });
+  });
 
-    r = stepFSM(s, indexUp(), 2000); // past cooldown, but finger still held up
-    s = r.next;
-    expect(r.event).toBeNull();
+  it('does not re-fire while held; re-fires after release and re-hold', () => {
+    const fired = hold(indexUp(), [0, 200, 400]);
+    expect(fired.event?.type).toBe('index');
 
-    r = stepFSM(s, makeLandmarks(), 2300); // lower the finger
-    s = r.next;
-    expect(r.event).toBeNull();
-    expect(s.indexActive).toBe(false);
+    // still holding → no re-fire
+    let s = fired.state;
+    s = stepFSM(s, indexUp(), 600).next;
+    expect(stepFSM(s, indexUp(), 1000).event).toBeNull();
 
-    r = stepFSM(s, indexUp(), 2600); // raise again
-    expect(r.event?.type).toBe('index');
+    // release, then re-hold → fires again
+    s = stepFSM(s, makeLandmarks(), 1100).next;
+    let again = null;
+    for (const t of [1200, 1400, 1600]) {
+      const r = stepFSM(s, indexUp(), t);
+      s = r.next;
+      if (r.event) {
+        again = r.event;
+        break;
+      }
+    }
+    expect(again?.type).toBe('index');
+  });
+
+  it('respects a custom holdMs', () => {
+    expect(hold(indexUp(), [0, 60, 120], 100).event?.type).toBe('index');
   });
 });
 
 describe('stepFSM — event timestamp', () => {
-  it('stamps the event with the current timestamp', () => {
-    expect(stepFSM(createFSMState(), pinkyUp(), 9999).event?.timestamp).toBe(9999);
+  it('stamps the event with the firing timestamp', () => {
+    expect(hold(pinkyUp(), [0, 200, 400]).event?.timestamp).toBe(400);
   });
 });

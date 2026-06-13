@@ -1,12 +1,14 @@
 export type TtsVoice = { id: string; label: string };
 
-// eSpeak-NG variants exposed in the picker (synthesized server-side; see /api/tts).
+// Natural macOS voices (synthesized server-side via `say`; see /api/tts). On non-macOS hosts the
+// server falls back to robotic eSpeak and ignores these names.
 const VOICES: TtsVoice[] = [
-  { id: 'en', label: 'Default' },
-  { id: 'en+m3', label: 'Male' },
-  { id: 'en+f3', label: 'Female' },
-  { id: 'en+croak', label: 'Croak' },
-  { id: 'en+whisper', label: 'Whisper' },
+  { id: 'Samantha', label: 'Samantha (US)' },
+  { id: 'Karen', label: 'Karen (AU)' },
+  { id: 'Moira', label: 'Moira (IE)' },
+  { id: 'Tessa', label: 'Tessa (ZA)' },
+  { id: 'Daniel', label: 'Daniel (UK)' },
+  { id: 'Rishi', label: 'Rishi (IN)' },
 ];
 
 type SpeakingListener = (speaking: boolean) => void;
@@ -15,7 +17,7 @@ type SpeakingListener = (speaking: boolean) => void;
 // reliable regardless of OS voices, unlocks on a user gesture, and can later be routed to a chosen
 // output device. Each speak() supersedes the previous one (barge-in).
 export class SpeechPlayer {
-  private voiceId = 'en';
+  private voiceId = 'Samantha';
   private ctx: AudioContext | null = null;
   private current: AudioBufferSourceNode | null = null;
   private reqId = 0;

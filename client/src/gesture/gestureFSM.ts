@@ -1,72 +1,56 @@
 import { detectIndex, detectPinky } from './detectors';
 import type { GestureEvent, Landmark } from './types';
 
-// Short debounce after a pose fires, to absorb landmark jitter at the moment of engagement.
-const GESTURE_COOLDOWN = 250;
+// A finger pose must be held continuously for this long (ms) before it fires. This is the main
+// guard against accidental slide changes from fleeting poses during normal hand movement.
+const HOLD_MS = 350;
 
 export type FSMConfig = {
-  cooldown?: number;
+  holdMs?: number;
 };
 
+type PoseState = { since: number | null; fired: boolean };
+
 export type FSMInternalState = {
-  cooldownUntil: number;
-  indexActive: boolean; // latch — true while the index finger is up
-  pinkyActive: boolean; // latch — true while the pinky finger is up
+  index: PoseState;
+  pinky: PoseState;
 };
 
 export function createFSMState(): FSMInternalState {
-  return { cooldownUntil: 0, indexActive: false, pinkyActive: false };
+  return { index: { since: null, fired: false }, pinky: { since: null, fired: false } };
 }
 
-// Pure: the index and pinky finger poses are EDGE-triggered — each fires once when the finger goes
-// up, and won't fire again until it goes back down (so holding it up doesn't repeat). A short
-// cooldown debounces landmark jitter. The two poses are mutually exclusive, so order doesn't matter.
+// Advance one pose latch: start a timer when the pose appears, fire once it's been held past the
+// threshold, and reset (re-arm) the moment the pose is released.
+function advancePose(
+  pose: PoseState,
+  detected: boolean,
+  now: number,
+  holdMs: number,
+): { next: PoseState; fire: boolean } {
+  if (!detected) return { next: { since: null, fired: false }, fire: false };
+  const since = pose.since ?? now;
+  if (now - since >= holdMs && !pose.fired) {
+    return { next: { since, fired: true }, fire: true };
+  }
+  return { next: { since, fired: pose.fired }, fire: false };
+}
+
+// Pure: index/pinky finger poses must be HELD for holdMs before firing once; releasing re-arms
+// them. The two poses are mutually exclusive in practice; index wins if both somehow match.
 export function stepFSM(
   current: FSMInternalState,
   landmarks: Landmark[],
   now: number,
   config: FSMConfig = {},
 ): { next: FSMInternalState; event: GestureEvent | null } {
-  const cooldown = config.cooldown ?? GESTURE_COOLDOWN;
+  const holdMs = config.holdMs ?? HOLD_MS;
 
-  const indexNow = detectIndex(landmarks);
-  let indexActive = current.indexActive;
-  let indexEdge = false;
-  if (!indexActive && indexNow) {
-    indexActive = true;
-    indexEdge = true;
-  } else if (indexActive && !indexNow) {
-    indexActive = false;
-  }
+  const index = advancePose(current.index, detectIndex(landmarks), now, holdMs);
+  const pinky = advancePose(current.pinky, detectPinky(landmarks), now, holdMs);
+  const next: FSMInternalState = { index: index.next, pinky: pinky.next };
 
-  const pinkyNow = detectPinky(landmarks);
-  let pinkyActive = current.pinkyActive;
-  let pinkyEdge = false;
-  if (!pinkyActive && pinkyNow) {
-    pinkyActive = true;
-    pinkyEdge = true;
-  } else if (pinkyActive && !pinkyNow) {
-    pinkyActive = false;
-  }
-
-  // Latches always carry forward, even during cooldown (so an edge mid-cooldown is absorbed).
-  const base: FSMInternalState = { cooldownUntil: current.cooldownUntil, indexActive, pinkyActive };
-
-  if (now < current.cooldownUntil) {
-    return { next: base, event: null };
-  }
-  if (indexEdge) {
-    return {
-      next: { ...base, cooldownUntil: now + cooldown },
-      event: { type: 'index', timestamp: now },
-    };
-  }
-  if (pinkyEdge) {
-    return {
-      next: { ...base, cooldownUntil: now + cooldown },
-      event: { type: 'pinky', timestamp: now },
-    };
-  }
-
-  return { next: base, event: null };
+  if (index.fire) return { next, event: { type: 'index', timestamp: now } };
+  if (pinky.fire) return { next, event: { type: 'pinky', timestamp: now } };
+  return { next, event: null };
 }
