@@ -1,50 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { SpeechPlayer } from './speechPlayer';
 
-interface Props {
-  player: SpeechPlayer;
-}
-
-export function VoicePicker({ player }: Props) {
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedName, setSelectedName] = useState<string>('');
-
-  useEffect(() => {
-    const load = () => {
-      const v = player.listVoices();
-      setVoices(v);
-      setSelectedName((prev) => {
-        if (prev && v.some((voice) => voice.name === prev)) return prev;
-        if (v.length > 0) {
-          player.setVoice(v[0]);
-          return v[0].name;
-        }
-        return '';
-      });
-    };
-    load();
-    window.speechSynthesis.addEventListener('voiceschanged', load);
-    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
-  }, [player]);
-
-  if (voices.length === 0) return null;
+export function VoicePicker({ player }: { player: SpeechPlayer }) {
+  const [voice, setVoice] = useState(player.getVoice());
 
   return (
     <select
-      value={selectedName}
+      value={voice}
       onChange={(e) => {
-        const voice = voices.find((v) => v.name === e.target.value);
-        if (voice) {
-          player.setVoice(voice);
-          setSelectedName(voice.name);
-        }
+        player.setVoice(e.target.value);
+        setVoice(e.target.value);
       }}
       style={{ fontSize: 13 }}
       aria-label="Cue voice"
     >
-      {voices.map((v) => (
-        <option key={v.name} value={v.name}>
-          {v.name} ({v.lang})
+      {player.voices().map((v) => (
+        <option key={v.id} value={v.id}>
+          {v.label}
         </option>
       ))}
     </select>

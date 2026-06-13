@@ -102,6 +102,9 @@ export function App() {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, color: '#555' }}>Cue voice:</span>
               <VoicePicker player={player} />
+              <button onClick={() => speak('AirDeck voice test — you should hear this.')}>
+                Test voice
+              </button>
               {isSpeaking && <span style={{ fontSize: 12, color: '#888' }}>speaking…</span>}
             </div>
             {slideEvent && (

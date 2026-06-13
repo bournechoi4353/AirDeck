@@ -2,119 +2,71 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SpeechPlayer } from './speechPlayer';
 
-class MockUtterance {
-  text: string;
-  voice: SpeechSynthesisVoice | null = null;
-  rate = 1;
-  onstart: ((e: Event) => void) | null = null;
-  onend: ((e: Event) => void) | null = null;
-  onerror: ((e: Event) => void) | null = null;
-  constructor(text: string) { this.text = text; }
+class MockSource {
+  buffer: unknown = null;
+  onended: (() => void) | null = null;
+  connect = vi.fn();
+  start = vi.fn();
+  stop = vi.fn();
 }
 
-const mockCancel = vi.fn();
-const mockSpeak = vi.fn();
-const mockGetVoices = vi.fn(() => [
-  { name: 'Alex', lang: 'en-US' } as SpeechSynthesisVoice,
-  { name: 'Amélie', lang: 'fr-FR' } as SpeechSynthesisVoice,
-  { name: 'Samantha', lang: 'en-GB' } as SpeechSynthesisVoice,
-]);
+class MockAudioContext {
+  state = 'running';
+  destination = {};
+  resume = vi.fn(async () => {});
+  decodeAudioData = vi.fn(async () => ({}) as AudioBuffer);
+  createBufferSource = vi.fn(() => new MockSource());
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal('SpeechSynthesisUtterance', MockUtterance);
-  Object.defineProperty(window, 'speechSynthesis', {
-    value: {
-      speak: mockSpeak,
-      cancel: mockCancel,
-      getVoices: mockGetVoices,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    },
-    writable: true,
-    configurable: true,
-  });
+  vi.stubGlobal('AudioContext', MockAudioContext);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(16) })),
+  );
 });
 
 describe('SpeechPlayer', () => {
-  it('cancels then speaks an utterance', () => {
-    const player = new SpeechPlayer();
-    player.speak('hello world');
-    expect(mockCancel).toHaveBeenCalledOnce();
-    expect(mockSpeak).toHaveBeenCalledWith(expect.any(MockUtterance));
+  it('exposes voice variants and lets you pick one', () => {
+    const p = new SpeechPlayer();
+    expect(p.voices().length).toBeGreaterThan(0);
+    expect(p.getVoice()).toBe('en');
+    p.setVoice('en+m3');
+    expect(p.getVoice()).toBe('en+m3');
   });
 
-  it('cancels before each new utterance (barge-in)', () => {
-    const player = new SpeechPlayer();
-    player.speak('first');
-    player.speak('second');
-    expect(mockCancel).toHaveBeenCalledTimes(2);
-    expect(mockSpeak).toHaveBeenCalledTimes(2);
+  it('POSTs the text and selected voice to /api/tts', async () => {
+    const p = new SpeechPlayer();
+    p.setVoice('en+f3');
+    await p.speak('hello world');
+    expect(fetch).toHaveBeenCalledWith('/api/tts', expect.objectContaining({ method: 'POST' }));
+    const init = vi.mocked(fetch).mock.calls[0][1];
+    expect(JSON.parse(String(init?.body))).toEqual({ text: 'hello world', voice: 'en+f3' });
   });
 
-  it('stop cancels synthesis and notifies false', () => {
-    const player = new SpeechPlayer();
+  it('ignores empty text', async () => {
+    const p = new SpeechPlayer();
+    await p.speak('   ');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('notifies speaking true on start, false on stop', async () => {
+    const p = new SpeechPlayer();
     const cb = vi.fn();
-    player.onSpeakingChange(cb);
-    player.stop();
-    expect(mockCancel).toHaveBeenCalledOnce();
-    expect(cb).toHaveBeenCalledWith(false);
-  });
-
-  it('listVoices returns only English voices', () => {
-    const player = new SpeechPlayer();
-    const voices = player.listVoices();
-    expect(voices).toHaveLength(2);
-    expect(voices.map((v) => v.name)).toEqual(['Alex', 'Samantha']);
-  });
-
-  it('onSpeakingChange cleanup removes listener', () => {
-    const player = new SpeechPlayer();
-    const cb = vi.fn();
-    const cleanup = player.onSpeakingChange(cb);
-    cleanup();
-    player.stop();
-    expect(cb).not.toHaveBeenCalled();
-  });
-
-  it('notifies true on utterance start, false on end', () => {
-    const player = new SpeechPlayer();
-    const cb = vi.fn();
-    player.onSpeakingChange(cb);
-
-    let captured: MockUtterance | null = null;
-    mockSpeak.mockImplementation((u: MockUtterance) => { captured = u; });
-
-    player.speak('hello');
-    captured!.onstart?.(new Event('start'));
+    p.onSpeakingChange(cb);
+    await p.speak('hi');
     expect(cb).toHaveBeenCalledWith(true);
-
-    captured!.onend?.(new Event('end'));
+    p.stop();
     expect(cb).toHaveBeenCalledWith(false);
   });
 
-  it('notifies false on utterance error', () => {
-    const player = new SpeechPlayer();
+  it('onSpeakingChange cleanup removes the listener', () => {
+    const p = new SpeechPlayer();
     const cb = vi.fn();
-    player.onSpeakingChange(cb);
-
-    let captured: MockUtterance | null = null;
-    mockSpeak.mockImplementation((u: MockUtterance) => { captured = u; });
-
-    player.speak('hello');
-    captured!.onerror?.(new Event('error'));
-    expect(cb).toHaveBeenCalledWith(false);
-  });
-
-  it('uses the set voice on the next utterance', () => {
-    const player = new SpeechPlayer();
-    const voice = { name: 'Alex', lang: 'en-US' } as SpeechSynthesisVoice;
-    player.setVoice(voice);
-
-    let captured: MockUtterance | null = null;
-    mockSpeak.mockImplementation((u: MockUtterance) => { captured = u; });
-
-    player.speak('test');
-    expect(captured!.voice).toBe(voice);
+    const off = p.onSpeakingChange(cb);
+    off();
+    p.stop();
+    expect(cb).not.toHaveBeenCalled();
   });
 });
