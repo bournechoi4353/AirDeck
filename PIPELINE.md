@@ -109,15 +109,80 @@ content is readable by the app; extension installs via "Load unpacked" in Chrome
 
 ## Phase 5 — Claude speaker-note service (Agent SDK)
 **Goal:** A fast 1–2 sentence cue per slide.
-- Backend service using `@anthropic-ai/claude-agent-sdk` `query()` with **subscription auth (no
-  API key)**, `maxTurns: 1`, tools off, `settingSources: []`, tight `systemPrompt`, fast model
-  (`haiku`).
-- Stream the cue to the client over SSE for low time-to-first-token.
-- **Lookahead:** pre-generate the next slide's cue on each change so it's instant on swipe.
-- The full deck + the user's talk goal are provided as context.
 
-**Exit:** On a slide change, a relevant 1–2 sentence cue is produced quickly; next-slide cue is
-already prefetched.
+### 5A — Backend cue service
+
+**File:** `server/src/notes/cueService.ts`
+
+- Install `@anthropic-ai/claude-agent-sdk`; import `query` from it.
+- Export `async function* streamCue(slide: SlideContent, deck: DeckContext)` that calls `query()`
+  with these fixed params — nothing more:
+  ```ts
+  query({
+    prompt: buildPrompt(slide, deck),   // slide title + body + notes as plain text
+    systemPrompt: CUE_SYSTEM_PROMPT,
+    model: 'claude-haiku-4-5',
+    maxTurns: 1,
+    allowedTools: [],
+    settingSources: [],                 // ignore CLAUDE.md / project config at runtime
+  })
+  ```
+- `CUE_SYSTEM_PROMPT` (constant in the same file):
+  > "You are a silent presentation coach whispering into the presenter's earpiece. Given a
+  > slide's title, body, and speaker notes, say one or two sentences the presenter needs to
+  > hear right now — a key fact, a transition cue, or the core point. Be direct. No filler.
+  > Never start with 'This slide…'."
+- `buildPrompt` formats the slide as: `Title: …\nBody: …\nNotes: …\nDeck goal: …` — no
+  JSON, just plain text the model reads fastest.
+- **Auth:** read `CLAUDE_CODE_OAUTH_TOKEN` from env (minted once with `claude setup-token`);
+  the SDK picks it up automatically — no `ANTHROPIC_API_KEY` needed anywhere.
+- Yield each text token from the `query()` async iterable as it arrives; the function is a
+  generator so the SSE layer can pipe it directly.
+
+### 5B — SSE streaming endpoint
+
+**File:** `server/src/notes/cueRouter.ts`
+
+- `GET /api/cue/stream?deckId=…&slideIndex=N`
+- On request: set headers `Content-Type: text/event-stream`, `Cache-Control: no-cache`,
+  `Connection: keep-alive`; flush immediately so the browser opens the stream.
+- Pull from `cueCache.getOrGenerate(deckId, slideIndex)` (see 5C); for each token write
+  `data: <token>\n\n` and flush.
+- After the last token write `data: [DONE]\n\n` and close the response.
+- No authentication on this endpoint for now — it's localhost-only in dev; add session
+  check in Phase 8.
+
+### 5C — Lookahead cache
+
+**File:** `server/src/notes/cueCache.ts`
+
+- `Map<string, Promise<string>>` keyed by `"${deckId}:${slideIndex}"`.
+- `getOrGenerate(deckId, slideIndex, slide, deck)`:
+  1. If cache hit: stream the already-resolved string token by token (split on spaces).
+  2. If miss: start `streamCue()`, collect tokens into a string, store the `Promise<string>`
+     in the map, and stream tokens to the caller in parallel as they arrive.
+  3. **Lookahead:** after kicking off slide N, immediately call `getOrGenerate` for slide N+1
+     (using the next slide's content from `deck.slides[slideIndex + 1]`) — fire and forget.
+- Cache is keyed per `deckId`; call `cueCache.clear(deckId)` on new deck load (Phase 4
+  emits a `deck-loaded` event the server listens to).
+- No TTL needed — a talk is short; the cache lives only for the session.
+
+### 5D — Client SSE consumer
+
+**File:** `client/src/slides/cueStream.ts`
+
+- Export `function connectCueStream(deckId: string, slideIndex: number, onToken: (t: string) => void, onDone: () => void): () => void`
+- Opens `new EventSource('/api/cue/stream?deckId=…&slideIndex=N')`.
+- On each `message` event: call `onToken(event.data)` unless `event.data === '[DONE]'`, in
+  which case call `onDone()` and close the source.
+- Returns a cleanup function that calls `source.close()` — caller (Phase 6 TTS layer)
+  invokes it on barge-in.
+- Called from the slide-change handler in Phase 4; the slide index comes from the
+  `slide-change` event payload.
+
+**Exit:** On a slide change, a relevant 1–2 sentence cue streams token-by-token to the
+client within ~300ms of the gesture firing; swiping to the next slide immediately returns
+the prefetched cue with no generation delay.
 
 ## Phase 6 — TTS + earpiece audio
 **Goal:** The presenter hears the cue, the audience doesn't.
