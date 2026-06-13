@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { HandTrackingView } from '../gesture';
 
 type Health = { status: string; service: string; time: string };
 
@@ -16,7 +17,16 @@ export function App() {
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', lineHeight: 1.5 }}>
       <h1>AirDeck</h1>
-      <p>Webcam-only presentation copilot. Phase 0 scaffold.</p>
+      <p>Webcam-only presentation copilot. Phase 1 — hand tracking.</p>
+
+      <section>
+        <h2>Hand tracking</h2>
+        <HandTrackingView />
+        <p style={{ fontSize: 13, color: '#555' }}>
+          Allow camera access; you should see 21 landmarks tracking your hand at ~30fps.
+        </p>
+      </section>
+
       <section>
         <h2>Backend status</h2>
         {health && (
