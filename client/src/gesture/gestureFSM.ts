@@ -1,82 +1,72 @@
-import { updateSwipeWindow, detectSwipe, detectPinch, detectPoint, wristX } from './detectors';
-import type { GestureEvent, GestureName, Landmark, SwipeWindow } from './types';
-import type { SwipeThresholds } from './detectors';
+import { detectIndex, detectPinky } from './detectors';
+import type { GestureEvent, Landmark } from './types';
 
-type FSMState = 'idle' | 'cooldown';
-
-export type CooldownDurations = {
-  'swipe-left': number;
-  'swipe-right': number;
-  pinch: number;
-  point: number;
-};
-
-const DEFAULT_COOLDOWNS: CooldownDurations = {
-  'swipe-left': 800,
-  'swipe-right': 800,
-  pinch: 300,
-  point: 300,
-};
+// Short debounce after a pose fires, to absorb landmark jitter at the moment of engagement.
+const GESTURE_COOLDOWN = 250;
 
 export type FSMConfig = {
-  cooldowns?: Partial<CooldownDurations>;
-  swipeThresholds?: Partial<SwipeThresholds>;
-  pinchThreshold?: number;
+  cooldown?: number;
 };
 
 export type FSMInternalState = {
-  state: FSMState;
   cooldownUntil: number;
-  swipeWindow: SwipeWindow;
+  indexActive: boolean; // latch — true while the index finger is up
+  pinkyActive: boolean; // latch — true while the pinky finger is up
 };
 
 export function createFSMState(): FSMInternalState {
-  return { state: 'idle', cooldownUntil: 0, swipeWindow: [] };
+  return { cooldownUntil: 0, indexActive: false, pinkyActive: false };
 }
 
-// Pure: takes the current FSM state + landmarks + timestamp, returns the next FSM state
-// and a gesture event if one fired. Priority: swipe > pinch > point.
+// Pure: the index and pinky finger poses are EDGE-triggered — each fires once when the finger goes
+// up, and won't fire again until it goes back down (so holding it up doesn't repeat). A short
+// cooldown debounces landmark jitter. The two poses are mutually exclusive, so order doesn't matter.
 export function stepFSM(
   current: FSMInternalState,
   landmarks: Landmark[],
   now: number,
   config: FSMConfig = {},
 ): { next: FSMInternalState; event: GestureEvent | null } {
-  const cooldowns = { ...DEFAULT_COOLDOWNS, ...config.cooldowns };
+  const cooldown = config.cooldown ?? GESTURE_COOLDOWN;
 
-  // Always update the swipe window so velocity history stays current even during cooldown.
-  const swipeWindow = updateSwipeWindow(current.swipeWindow, wristX(landmarks), now);
-
-  if (current.state === 'cooldown') {
-    if (now < current.cooldownUntil) {
-      return { next: { ...current, swipeWindow }, event: null };
-    }
-    // Cooldown expired — drop back to idle, but don't fire on this frame.
-    return { next: { state: 'idle', cooldownUntil: 0, swipeWindow }, event: null };
+  const indexNow = detectIndex(landmarks);
+  let indexActive = current.indexActive;
+  let indexEdge = false;
+  if (!indexActive && indexNow) {
+    indexActive = true;
+    indexEdge = true;
+  } else if (indexActive && !indexNow) {
+    indexActive = false;
   }
 
-  // idle — run detectors in priority order
-  let gesture: GestureName | null = null;
-
-  const swipe = detectSwipe(swipeWindow, config.swipeThresholds);
-  if (swipe) {
-    gesture = swipe;
-  } else if (detectPinch(landmarks, config.pinchThreshold)) {
-    gesture = 'pinch';
-  } else if (detectPoint(landmarks, config.pinchThreshold)) {
-    gesture = 'point';
+  const pinkyNow = detectPinky(landmarks);
+  let pinkyActive = current.pinkyActive;
+  let pinkyEdge = false;
+  if (!pinkyActive && pinkyNow) {
+    pinkyActive = true;
+    pinkyEdge = true;
+  } else if (pinkyActive && !pinkyNow) {
+    pinkyActive = false;
   }
 
-  if (!gesture) {
-    return { next: { state: 'idle', cooldownUntil: 0, swipeWindow }, event: null };
+  // Latches always carry forward, even during cooldown (so an edge mid-cooldown is absorbed).
+  const base: FSMInternalState = { cooldownUntil: current.cooldownUntil, indexActive, pinkyActive };
+
+  if (now < current.cooldownUntil) {
+    return { next: base, event: null };
+  }
+  if (indexEdge) {
+    return {
+      next: { ...base, cooldownUntil: now + cooldown },
+      event: { type: 'index', timestamp: now },
+    };
+  }
+  if (pinkyEdge) {
+    return {
+      next: { ...base, cooldownUntil: now + cooldown },
+      event: { type: 'pinky', timestamp: now },
+    };
   }
 
-  const event: GestureEvent = { type: gesture, timestamp: now };
-  const next: FSMInternalState = {
-    state: 'cooldown',
-    cooldownUntil: now + cooldowns[gesture],
-    swipeWindow: [], // clear window so the same motion can't re-fire after cooldown
-  };
-
-  return { next, event };
+  return { next: base, event: null };
 }

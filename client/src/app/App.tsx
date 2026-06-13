@@ -72,10 +72,8 @@ export function App() {
               current={deck.current}
               total={deck.total}
               slide={deck.slide}
-              zoom={deck.zoom}
               onPrev={deck.prev}
               onNext={deck.next}
-              onToggleZoom={deck.toggleZoom}
             />
             <p style={{ fontSize: 13, color: '#555', marginTop: 8 }}>
               Speaker notes (placeholder until Phase 5):{' '}
@@ -105,14 +103,14 @@ export function App() {
                 Reset calibration
               </button>
               <span style={{ fontSize: 12, color: '#555' }}>
-                hand: {profile.handedness ?? 'auto'} · swipe-right → next · swipe-left → prev · pinch → zoom
+                hand: {profile.handedness ?? 'auto'} · index finger → prev · pinky finger → next
               </span>
             </div>
 
             <div style={{ marginTop: 12 }}>
               <strong>Gesture log</strong>
               {log.length === 0 ? (
-                <p style={{ fontSize: 13, color: '#555' }}>swipe / pinch / point to drive the deck…</p>
+                <p style={{ fontSize: 13, color: '#555' }}>raise your index finger to go back, pinky to go forward…</p>
               ) : (
                 <ul style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, paddingLeft: 18 }}>
                   {log.map((g, i) => (

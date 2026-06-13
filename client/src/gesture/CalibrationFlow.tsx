@@ -5,8 +5,6 @@ const MIRROR = 'scaleX(-1)';
 
 const INSTRUCTIONS: Record<CalibrationStep, string> = {
   handedness: 'Hold up the hand you’ll present with and keep it in view.',
-  swipe: 'Swipe that hand left and right a few times, like flipping slides.',
-  pinch: 'Pinch your thumb and index finger together a few times.',
   done: 'Calibration complete.',
 };
 
@@ -59,7 +57,7 @@ export function CalibrationFlow({
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           {step !== 'done' && (
             <button onClick={advance} disabled={status !== 'running'}>
-              {step === 'pinch' ? 'Finish' : 'Next'}
+              Finish
             </button>
           )}
           <button onClick={onCancel}>Cancel</button>

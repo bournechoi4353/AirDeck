@@ -29,16 +29,12 @@ export function prevSlide(state: DeckState): DeckState {
   return goToSlide(state, state.current - 1);
 }
 
-// Maps a recognized gesture to a deck action. `point` is the laser (Phase 7), not navigation.
+// Maps a recognized gesture to a deck action: index finger → previous, pinky finger → next.
 export function gestureToDeckAction(gesture: GestureName): DeckAction {
   switch (gesture) {
-    case 'swipe-right':
-      return 'next';
-    case 'swipe-left':
+    case 'index':
       return 'prev';
-    case 'pinch':
-      return 'zoom';
-    case 'point':
-      return 'none';
+    case 'pinky':
+      return 'next';
   }
 }

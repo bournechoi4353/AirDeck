@@ -21,13 +21,13 @@ export const SAMPLE_DECK: Deck = {
     {
       index: 2,
       title: 'How it works',
-      text: 'A webcam tracks your hands. Swipe to move slides. Claude reads each slide and whispers your next line.',
+      text: 'A webcam tracks your hands. A finger gesture moves slides. Claude reads each slide and whispers your next line.',
       notes: 'Walk the loop end to end: gesture in, slide changes, cue in your ear.',
     },
     {
       index: 3,
       title: 'Gestures',
-      text: 'Swipe right / left to advance. Pinch to zoom. Point to drop a laser highlight.',
+      text: 'Index finger to go back, pinky finger to go forward.',
       notes: 'Demo each gesture live right here on this slide.',
     },
     {

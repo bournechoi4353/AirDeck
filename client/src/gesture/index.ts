@@ -1,5 +1,5 @@
 // Gesture engine — webcam capture + MediaPipe HandLandmarker + the gesture FSM
-// (swipe / pinch / point) and calibration. Phases 1-3.
+// (index / pinky finger poses) and calibration. Phases 1-3.
 export { HandTrackingView } from './HandTrackingView';
 export { useHandTracking } from './useHandTracking';
 export type { TrackingStatus, HandTracking, UseHandTrackingOptions } from './useHandTracking';
@@ -12,13 +12,11 @@ export {
   saveCalibration,
   clearCalibration,
   toFSMConfig,
-  deriveSwipeThresholds,
-  derivePinchThreshold,
 } from './calibration';
-export type { CalibrationProfile, SwipeSample } from './calibration';
+export type { CalibrationProfile } from './calibration';
 export { filterHand, getPreferredHandedness, setPreferredHandedness } from './handFilter';
 export type { Handedness } from './handFilter';
-export { mirrorX, updateSwipeWindow, detectSwipe, wristX, detectPinch, detectPoint } from './detectors';
+export { detectIndex, detectPinky } from './detectors';
 export { createFSMState, stepFSM } from './gestureFSM';
-export type { FSMInternalState, FSMConfig, CooldownDurations } from './gestureFSM';
-export type { GestureName, GestureEvent, Landmark, SwipeWindow } from './types';
+export type { FSMInternalState, FSMConfig } from './gestureFSM';
+export type { GestureName, GestureEvent, Landmark } from './types';

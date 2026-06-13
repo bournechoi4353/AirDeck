@@ -59,9 +59,7 @@ describe('navigation', () => {
 
 describe('gestureToDeckAction', () => {
   it('maps gestures to deck actions', () => {
-    expect(gestureToDeckAction('swipe-right')).toBe('next');
-    expect(gestureToDeckAction('swipe-left')).toBe('prev');
-    expect(gestureToDeckAction('pinch')).toBe('zoom');
-    expect(gestureToDeckAction('point')).toBe('none');
+    expect(gestureToDeckAction('index')).toBe('prev');
+    expect(gestureToDeckAction('pinky')).toBe('next');
   });
 });

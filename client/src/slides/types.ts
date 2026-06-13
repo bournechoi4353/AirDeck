@@ -21,4 +21,4 @@ export type SlideChangeEvent = {
   slide: Slide;
 };
 
-export type DeckAction = 'next' | 'prev' | 'zoom' | 'none';
+export type DeckAction = 'next' | 'prev';
