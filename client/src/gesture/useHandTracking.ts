@@ -3,8 +3,18 @@ import { DrawingUtils, type HandLandmarker } from '@mediapipe/tasks-vision';
 import { startCamera, stopCamera } from './camera';
 import { createHandLandmarker } from './handLandmarker';
 import { drawHands } from './overlay';
+import { filterHand } from './handFilter';
+import { createFSMState, stepFSM, type FSMConfig } from './gestureFSM';
+import type { GestureEvent } from './types';
 
 export type TrackingStatus = 'loading' | 'running' | 'error';
+
+export type UseHandTrackingOptions = {
+  // Calibration-derived thresholds/cooldowns for the gesture FSM.
+  fsmConfig?: FSMConfig;
+  // Called once per recognized gesture (debounced by the FSM cooldown).
+  onGesture?: (event: GestureEvent) => void;
+};
 
 export type HandTracking = {
   videoRef: RefObject<HTMLVideoElement>;
@@ -12,26 +22,35 @@ export type HandTracking = {
   status: TrackingStatus;
   error: string | null;
   fps: number;
+  lastGesture: GestureEvent | null;
 };
 
-// Wires camera + HandLandmarker + a requestAnimationFrame loop. Per-frame results are drawn
-// straight to the canvas — they never go through React state, so the 30fps loop causes no
-// re-render jank. Only status/error/fps (low-frequency) touch React state.
+// Wires camera + HandLandmarker + a requestAnimationFrame loop, then runs the (committed, pure)
+// hand selector and gesture FSM over each frame and emits GestureEvents. Per-frame landmark data
+// is drawn straight to the canvas and never goes through React state, so the 30fps loop causes no
+// re-render jank — only status/error/fps and the (rare) lastGesture touch React state.
 //
 // Inference runs on the main thread in VIDEO mode (GPU delegate), as in MediaPipe's own web
 // samples. Phase 9 can move it to a Web Worker + OffscreenCanvas if profiling shows jank.
-export function useHandTracking(): HandTracking {
+export function useHandTracking(options: UseHandTrackingOptions = {}): HandTracking {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState<TrackingStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [fps, setFps] = useState(0);
+  const [lastGesture, setLastGesture] = useState<GestureEvent | null>(null);
+
+  // Keep latest options in a ref so the once-started loop always reads current values
+  // (new fsmConfig / onGesture) without restarting the camera.
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   useEffect(() => {
     let landmarker: HandLandmarker | null = null;
     let stream: MediaStream | null = null;
     let rafId = 0;
     let cancelled = false;
+    const fsm = { state: createFSMState() };
 
     async function init(): Promise<void> {
       const video = videoRef.current;
@@ -64,6 +83,19 @@ export function useHandTracking(): HandTracking {
             lastVideoTime = video.currentTime;
             const result = landmarker.detectForVideo(video, now);
             drawHands(ctx, drawingUtils, result, canvas.width, canvas.height);
+
+            const hand = filterHand({
+              landmarks: result.landmarks,
+              handedness: result.handednesses,
+            });
+            if (hand) {
+              const { next, event } = stepFSM(fsm.state, hand, now, optionsRef.current.fsmConfig);
+              fsm.state = next;
+              if (event) {
+                setLastGesture(event);
+                optionsRef.current.onGesture?.(event);
+              }
+            }
             frames += 1;
           }
           if (now - fpsClock >= 500) {
@@ -91,5 +123,5 @@ export function useHandTracking(): HandTracking {
     };
   }, []);
 
-  return { videoRef, canvasRef, status, error, fps };
+  return { videoRef, canvasRef, status, error, fps, lastGesture };
 }

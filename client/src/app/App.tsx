@@ -1,31 +1,123 @@
-import { useEffect, useState } from 'react';
-import { HandTrackingView } from '../gesture';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  CalibrationFlow,
+  HandTrackingView,
+  clearCalibration,
+  loadCalibration,
+  toFSMConfig,
+  type CalibrationProfile,
+  type GestureEvent,
+} from '../gesture';
+import { DeckViewer, SAMPLE_DECK, useDeck, type SlideChangeEvent } from '../slides';
 
 type Health = { status: string; service: string; time: string };
+type Mode = 'present' | 'calibrate';
+
+// Placeholder deck until Phase 4C loads real decks from Google.
+const DECK = SAMPLE_DECK;
 
 export function App() {
   const [health, setHealth] = useState<Health | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>('present');
+  const [profile, setProfile] = useState<CalibrationProfile>(() => loadCalibration());
+  const [log, setLog] = useState<GestureEvent[]>([]);
+  const [slideEvent, setSlideEvent] = useState<SlideChangeEvent | null>(null);
+
+  const fsmConfig = useMemo(() => toFSMConfig(profile), [profile]);
+  const deck = useDeck(DECK, { onSlideChange: setSlideEvent });
 
   useEffect(() => {
     fetch('/api/health')
       .then((r) => r.json())
       .then((data: Health) => setHealth(data))
-      .catch((e: unknown) => setError(String(e)));
+      .catch((e: unknown) => setHealthError(String(e)));
   }, []);
 
-  return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', lineHeight: 1.5 }}>
-      <h1>AirDeck</h1>
-      <p>Webcam-only presentation copilot. Phase 1 — hand tracking.</p>
+  const handleGesture = (event: GestureEvent) => {
+    setLog((prev) => [event, ...prev].slice(0, 8));
+    deck.handleGesture(event);
+  };
 
-      <section>
-        <h2>Hand tracking</h2>
-        <HandTrackingView />
-        <p style={{ fontSize: 13, color: '#555' }}>
-          Allow camera access; you should see 21 landmarks tracking your hand at ~30fps.
-        </p>
-      </section>
+  return (
+    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', lineHeight: 1.5, maxWidth: 820 }}>
+      <h1>AirDeck</h1>
+      <p>Webcam-only presentation copilot. Phase 4A — gesture-driven deck viewer.</p>
+
+      {mode === 'calibrate' ? (
+        <section>
+          <h2>Calibrate</h2>
+          <CalibrationFlow
+            onComplete={(p) => {
+              setProfile(p);
+              setMode('present');
+            }}
+            onCancel={() => setMode('present')}
+          />
+        </section>
+      ) : (
+        <>
+          <section>
+            <h2>Present</h2>
+            <DeckViewer
+              title={DECK.title}
+              current={deck.current}
+              total={deck.total}
+              slide={deck.slide}
+              zoom={deck.zoom}
+              onPrev={deck.prev}
+              onNext={deck.next}
+              onToggleZoom={deck.toggleZoom}
+            />
+            <p style={{ fontSize: 13, color: '#555', marginTop: 8 }}>
+              Speaker notes (placeholder until Phase 5):{' '}
+              <em>{deck.slide.notes ?? deck.slide.text}</em>
+            </p>
+            {slideEvent && (
+              <p style={{ fontSize: 12, color: '#777', margin: 0 }}>
+                slidechange → #{slideEvent.index + 1} “{slideEvent.slide.title}” (content ready for Claude)
+              </p>
+            )}
+          </section>
+
+          <section>
+            <h2>Camera &amp; gestures</h2>
+            <div style={{ width: 320 }}>
+              <HandTrackingView options={{ fsmConfig, onGesture: handleGesture }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => setMode('calibrate')}>Calibrate gestures</button>
+              <button
+                onClick={() => {
+                  clearCalibration();
+                  setProfile(loadCalibration());
+                }}
+              >
+                Reset calibration
+              </button>
+              <span style={{ fontSize: 12, color: '#555' }}>
+                hand: {profile.handedness ?? 'auto'} · swipe-right → next · swipe-left → prev · pinch → zoom
+              </span>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <strong>Gesture log</strong>
+              {log.length === 0 ? (
+                <p style={{ fontSize: 13, color: '#555' }}>swipe / pinch / point to drive the deck…</p>
+              ) : (
+                <ul style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, paddingLeft: 18 }}>
+                  {log.map((g, i) => (
+                    <li key={`${g.timestamp}-${i}`}>
+                      {g.type} @ {Math.round(g.timestamp)}ms
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        </>
+      )}
 
       <section>
         <h2>Backend status</h2>
@@ -34,8 +126,8 @@ export function App() {
             ✓ {health.service}: {health.status} ({health.time})
           </p>
         )}
-        {error && <p style={{ color: 'crimson' }}>✗ cannot reach backend: {error}</p>}
-        {!health && !error && <p>checking…</p>}
+        {healthError && <p style={{ color: 'crimson' }}>✗ cannot reach backend: {healthError}</p>}
+        {!health && !healthError && <p>checking…</p>}
       </section>
     </main>
   );
