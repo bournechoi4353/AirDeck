@@ -56,7 +56,10 @@ export function App() {
 
   useEffect(() => {
     fetch('/api/health')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data: Health) => setHealth(data))
       .catch((e: unknown) => setHealthError(String(e)));
   }, []);

@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { Router } from 'express';
-import text2wav from 'text2wav';
 
 const execFileAsync = promisify(execFile);
 const isMac = process.platform === 'darwin';
@@ -37,6 +36,7 @@ async function synthMac(text: string, voice: string): Promise<Buffer> {
 // Anywhere else: eSpeak-NG compiled to WASM (robotic, but works on any platform).
 async function synthEspeak(text: string, voice: string): Promise<Buffer> {
   const v = ESPEAK_VOICE.test(voice) ? voice : 'en';
+  const { default: text2wav } = await import('text2wav');
   return Buffer.from(await text2wav(text, { voice: v }));
 }
 
