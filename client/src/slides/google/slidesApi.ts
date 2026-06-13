@@ -1,3 +1,5 @@
+import { googleGet } from './http';
+
 // Minimal subset of the Google Slides `presentations.get` response shape that we read.
 type TextRun = { content?: string };
 type TextElement = { textRun?: TextRun };
@@ -53,10 +55,10 @@ export function parseSlides(presentation: SlidesApiPresentation): {
 }
 
 export async function fetchPresentation(id: string, token: string): Promise<SlidesApiPresentation> {
-  const res = await fetch(
+  const res = await googleGet(
     `https://slides.googleapis.com/v1/presentations/${encodeURIComponent(id)}`,
-    { headers: { Authorization: `Bearer ${token}` } },
+    token,
+    'Slides API',
   );
-  if (!res.ok) throw new Error(`Slides API failed: ${res.status} ${res.statusText}`);
   return (await res.json()) as SlidesApiPresentation;
 }
