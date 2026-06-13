@@ -1,5 +1,12 @@
 import type { Slide, Deck } from './types.js';
 
+// The cue service only needs slide text. Strip the (large, base64) rendered page images before
+// sending — a full imported deck's images blow past the server's JSON body limit, which is why
+// cues worked for the sample deck (no images) but not for imported Google decks.
+function textOnly(slide: Slide): Slide {
+  return { index: slide.index, title: slide.title, text: slide.text, notes: slide.notes };
+}
+
 export function connectCueStream(
   deckId: string,
   slideIndex: number,
@@ -11,11 +18,14 @@ export function connectCueStream(
   let closed = false;
   const controller = new AbortController();
 
+  // Keep slide text (the lookahead prefetch needs the next slide's text), drop the images.
+  const slimDeck: Deck = { id: deck.id, title: deck.title, slides: deck.slides.map(textOnly) };
+
   const run = async () => {
     const res = await fetch('/api/cue/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deckId, slideIndex, slide, deck }),
+      body: JSON.stringify({ deckId, slideIndex, slide: textOnly(slide), deck: slimDeck }),
       signal: controller.signal,
     });
 
