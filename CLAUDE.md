@@ -81,8 +81,18 @@ airdeck/
 
 ## Dev commands
 
-To be filled in once Phase 0 scaffolds the project. Expected: `pnpm dev` (client + server),
-`pnpm test` (gesture math unit tests), `pnpm lint`.
+```bash
+npm install
+npm run dev        # client (http://localhost:5173) + server (http://localhost:8787), parallel
+npm run build      # typecheck + build both workspaces
+npm test           # vitest in both workspaces
+npm run typecheck  # tsc --noEmit in both
+npm run lint       # eslint
+npm run format     # prettier --write
+```
+
+npm-workspaces monorepo (`client`, `server`). The client dev server proxies `/api` to the backend,
+so the browser never deals with CORS.
 
 ## Conventions
 

@@ -15,7 +15,7 @@ Rough budget: gesture detect ~50ms · slide advance ~100ms · cue generation fir
 - Lint/format/test config; `.env.example`; npm scripts (`dev`, `test`, `lint`).
 - Empty subsystem folders per the structure in CLAUDE.md.
 
-**Exit:** `pnpm dev` runs client and server; a placeholder page loads and hits a health endpoint.
+**Exit:** `npm run dev` runs client and server; a placeholder page loads and hits a health endpoint.
 
 ## Phase 1 — Webcam + hand tracking
 **Goal:** Live hand landmarks from the webcam.
