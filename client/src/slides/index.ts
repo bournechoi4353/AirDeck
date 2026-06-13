@@ -15,6 +15,9 @@ export {
 export type { DeckState } from './deck';
 export type { Deck, Slide, SlideChangeEvent, DeckAction } from './types';
 
+// Cue streaming (Phase 5/6)
+export { connectCueStream } from './cueStream';
+
 // Google integration
 export { GoogleConnect } from './GoogleConnect';
 export { useGoogleDeck } from './useGoogleDeck';

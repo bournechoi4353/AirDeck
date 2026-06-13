@@ -1,3 +1,4 @@
-// Audio — TTS playback via Web Audio and output-device (earpiece) routing with setSinkId.
-// Phase 6.
-export {};
+export { SpeechPlayer } from './speechPlayer';
+export { VoicePicker } from './VoicePicker';
+export { useTTS } from './useTTS';
+export type { UseTTS } from './useTTS';

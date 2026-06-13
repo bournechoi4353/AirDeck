@@ -1,11 +1,14 @@
 import cors from 'cors';
 import express from 'express';
+import { cueRouter } from './notes/index.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 8787);
 
 app.use(cors());
 app.use(express.json());
+
+app.use('/api/cue', cueRouter);
 
 app.get('/', (_req, res) => {
   res

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalibrationFlow,
   HandTrackingView,
@@ -12,10 +12,12 @@ import {
   DeckViewer,
   GoogleConnect,
   SAMPLE_DECK,
+  connectCueStream,
   useDeck,
   useGoogleDeck,
   type SlideChangeEvent,
 } from '../slides';
+import { VoicePicker, useTTS } from '../audio';
 
 type Health = { status: string; service: string; time: string };
 type Mode = 'present' | 'calibrate';
@@ -33,6 +35,24 @@ export function App() {
   const google = useGoogleDeck();
   const activeDeck = google.deck ?? SAMPLE_DECK;
   const deck = useDeck(activeDeck, { onSlideChange: setSlideEvent });
+
+  const { speak, isSpeaking, player } = useTTS();
+  const activeDeckRef = useRef(activeDeck);
+  activeDeckRef.current = activeDeck;
+
+  useEffect(() => {
+    if (!slideEvent) return;
+    let cueText = '';
+    const cleanup = connectCueStream(
+      activeDeckRef.current.id,
+      slideEvent.index,
+      slideEvent.slide,
+      activeDeckRef.current,
+      (token) => { cueText += token; },
+      () => { if (cueText.trim()) speak(cueText); },
+    );
+    return cleanup;
+  }, [slideEvent, speak]);
 
   useEffect(() => {
     fetch('/api/health')
@@ -79,9 +99,14 @@ export function App() {
               Speaker notes (placeholder until Phase 5):{' '}
               <em>{deck.slide.notes ?? deck.slide.text}</em>
             </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: '#555' }}>Cue voice:</span>
+              <VoicePicker player={player} />
+              {isSpeaking && <span style={{ fontSize: 12, color: '#888' }}>speaking…</span>}
+            </div>
             {slideEvent && (
-              <p style={{ fontSize: 12, color: '#777', margin: 0 }}>
-                slidechange → #{slideEvent.index + 1} “{slideEvent.slide.title}” (content ready for Claude)
+              <p style={{ fontSize: 12, color: '#777', margin: '4px 0 0' }}>
+                slide #{slideEvent.index + 1} — “{slideEvent.slide.title}”
               </p>
             )}
           </section>

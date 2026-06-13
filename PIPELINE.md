@@ -134,8 +134,8 @@ content is readable by the app; extension installs via "Load unpacked" in Chrome
   > Never start with 'This slide…'."
 - `buildPrompt` formats the slide as: `Title: …\nBody: …\nNotes: …\nDeck goal: …` — no
   JSON, just plain text the model reads fastest.
-- **Auth:** read `CLAUDE_CODE_OAUTH_TOKEN` from env (minted once with `claude setup-token`);
-  the SDK picks it up automatically — no `ANTHROPIC_API_KEY` needed anywhere.
+- **Auth:** the SDK reads the existing `~/.claude` login state automatically — no API key,
+  no token setup, no payments. Just be logged in to Claude.
 - Yield each text token from the `query()` async iterable as it arrives; the function is a
   generator so the SSE layer can pipe it directly.
 
@@ -186,12 +186,61 @@ the prefetched cue with no generation delay.
 
 ## Phase 6 — TTS + earpiece audio
 **Goal:** The presenter hears the cue, the audience doesn't.
-- Stream the cue text to TTS; play via Web Audio with low latency.
-- Route output to a presenter-selected device with `setSinkId`.
-- Barge-in: interrupt the current cue if the slide changes again.
-- Offline fallback via browser `SpeechSynthesis`.
 
-**Exit:** Slide change → cue plays in the chosen earpiece within the latency target; switching
+**Provider: browser `SpeechSynthesis`** — zero cost, zero API key, ~0ms latency. Runs entirely
+in the browser using the OS's built-in voices. Neural TTS (OpenAI / ElevenLabs) is a Phase 9
+upgrade path; `server/src/tts/` remains a stub for now.
+
+**Device routing note:** `SpeechSynthesis` does not support `setSinkId`. The presenter routes
+audio to their earpiece via system audio settings (e.g. set the default output device before
+the talk). A voice picker lets them choose among installed OS voices.
+
+### 6A — Speech player
+
+**File:** `client/src/audio/speechPlayer.ts`
+
+- `SpeechPlayer` class wrapping `window.speechSynthesis`:
+  - `speak(text: string): void` — cancels any current utterance (barge-in), creates a new
+    `SpeechSynthesisUtterance` with the selected voice, rate, and pitch, calls `speechSynthesis.speak()`.
+  - `stop(): void` — `window.speechSynthesis.cancel()`.
+  - `setVoice(voice: SpeechSynthesisVoice): void` — stores voice for next utterance.
+  - `listVoices(): SpeechSynthesisVoice[]` — `speechSynthesis.getVoices()` filtered to English
+    (`lang.startsWith('en')`); re-fetched on the `voiceschanged` event (async load on Chrome).
+  - `onSpeakingChange(cb: (speaking: boolean) => void)` — fires via utterance `onstart`/`onend`.
+
+### 6B — Voice picker
+
+**File:** `client/src/audio/VoicePicker.tsx`
+
+- `<select>` populated from `player.listVoices()`.
+- Calls `onVoiceChange(voice)` prop on change.
+- Rendered inline in `App.tsx` for Phase 6; Phase 8 moves it into the HUD.
+
+### 6C — `useTTS` hook
+
+**File:** `client/src/audio/useTTS.ts`
+
+- `useTTS()` → `{ speak(text: string): void, stop(): void, isSpeaking: boolean }`.
+- `SpeechPlayer` held in a `useRef`.
+- `speak(text)`: calls `player.speak(text)` — barge-in is handled inside `SpeechPlayer.speak`.
+- `stop()`: calls `player.stop()`.
+- `isSpeaking`: React state updated via `player.onSpeakingChange`.
+
+### 6D — Wire into slide-change
+
+- In the slide-change handler (where `connectCueStream` is called): collect tokens into a string;
+  on `onDone` call `speak(cueText)`.
+- On every new slide-change: `speak()` already cancels the current utterance internally, so no
+  explicit `stop()` call needed before restarting the cue stream.
+
+### 6E — Tests
+
+- `speechPlayer.test.ts` — mock `window.speechSynthesis`; verify `speak` fires utterance, second
+  `speak` cancels first (barge-in), `stop` calls `cancel`, voice filter returns only English voices.
+- `useTTS.test.ts` — React Testing Library; verify `speak` → `isSpeaking` true, utterance end →
+  `isSpeaking` false, second `speak` mid-utterance → barge-in fires.
+
+**Exit:** Slide change → cue plays in the chosen OS voice within the latency target; switching
 slides mid-cue interrupts cleanly.
 
 ## Phase 7 — Laser highlight overlay
