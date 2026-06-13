@@ -8,13 +8,17 @@ import {
   type CalibrationProfile,
   type GestureEvent,
 } from '../gesture';
-import { DeckViewer, SAMPLE_DECK, useDeck, type SlideChangeEvent } from '../slides';
+import {
+  DeckViewer,
+  GoogleConnect,
+  SAMPLE_DECK,
+  useDeck,
+  useGoogleDeck,
+  type SlideChangeEvent,
+} from '../slides';
 
 type Health = { status: string; service: string; time: string };
 type Mode = 'present' | 'calibrate';
-
-// Placeholder deck until Phase 4C loads real decks from Google.
-const DECK = SAMPLE_DECK;
 
 export function App() {
   const [health, setHealth] = useState<Health | null>(null);
@@ -25,7 +29,10 @@ export function App() {
   const [slideEvent, setSlideEvent] = useState<SlideChangeEvent | null>(null);
 
   const fsmConfig = useMemo(() => toFSMConfig(profile), [profile]);
-  const deck = useDeck(DECK, { onSlideChange: setSlideEvent });
+
+  const google = useGoogleDeck();
+  const activeDeck = google.deck ?? SAMPLE_DECK;
+  const deck = useDeck(activeDeck, { onSlideChange: setSlideEvent });
 
   useEffect(() => {
     fetch('/api/health')
@@ -42,7 +49,7 @@ export function App() {
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', lineHeight: 1.5, maxWidth: 820 }}>
       <h1>AirDeck</h1>
-      <p>Webcam-only presentation copilot. Phase 4A — gesture-driven deck viewer.</p>
+      <p>Webcam-only presentation copilot. Phase 4 — Google Slides + gesture-driven deck.</p>
 
       {mode === 'calibrate' ? (
         <section>
@@ -59,8 +66,9 @@ export function App() {
         <>
           <section>
             <h2>Present</h2>
+            <GoogleConnect google={google} />
             <DeckViewer
-              title={DECK.title}
+              title={activeDeck.title}
               current={deck.current}
               total={deck.total}
               slide={deck.slide}
