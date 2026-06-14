@@ -1,6 +1,7 @@
 // Slides — deck model, viewer, gesture-driven navigation (Phase 4A), and the Google Slides
 // connection: OAuth, content extraction, and PDF render (Phase 4B/4C).
 export { DeckViewer } from './DeckViewer';
+export { SlideView } from './SlideView';
 export { useDeck } from './useDeck';
 export type { UseDeck, UseDeckOptions } from './useDeck';
 export { SAMPLE_DECK } from './sampleDeck';
