@@ -16,7 +16,8 @@
     "test": "npm run test -w client && npm run test -w server",
     "typecheck": "npm run typecheck -w client && npm run typecheck -w server",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "tunnel": "cloudflared tunnel --url http://localhost:8787 --protocol http2"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

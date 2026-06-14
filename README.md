@@ -42,45 +42,54 @@ as I will not be able to provide my Google Cloud API key.
 Once that's in place, the present view shows a "Connect Google Slides" button that opens a popup to your Google acounts
 and lets you pick one of your decks.
 
-<<<<<<< Updated upstream
-(Thanks Claude for helping make this!)
-=======
 ## Deploying
 
-The two packages deploy to two different places, and that split is not optional. The server uses
-the Claude Agent SDK, which runs your Claude subscription by spawning the Claude Code CLI as a
-background process. That needs a real, always-on Node host, so it cannot live on Vercel's
-serverless functions. The plan is:
+The app is two pieces, and they live in different places. The client is a static site, so it goes
+on Vercel with no trouble. The server is the part that talks to Claude: it uses the Claude Agent
+SDK, which runs your subscription by launching the Claude Code CLI as a background process. That
+needs a real, always-on Node process, which Vercel's serverless functions cannot provide.
 
-- The client (a static site) goes on Vercel.
-- The server goes on Render, which gives you a persistent Node process.
+The free way to do this without a credit card is to run the server on your own machine and expose
+it to the internet with a Cloudflare tunnel. Your Vercel site then calls that public URL. Your
+machine has to be on while you present, which is fine, since it is already running the webcam.
 
-### Server on Render
+### 1. Set your token once
 
-1. Create a new Web Service on Render and point it at this repo. The included `render.yaml`
-   already sets the build and start commands and a health check.
-2. Mint a subscription token on your own machine with `claude setup-token`, then paste it into the
-   Render dashboard as the `CLAUDE_CODE_OAUTH_TOKEN` environment variable. This is what connects
-   your Claude plan. No API key is involved, and the token is good for about a year, after which
-   you run `claude setup-token` again.
-3. Deploy. Render gives you a public URL like `https://airdeck-server.onrender.com`.
+Mint a subscription token with `claude setup-token`, then put it in a file at `server/.env`:
 
-A couple of notes. The free Render plan sleeps after a stretch of inactivity, so the first cue
-after a pause takes a few seconds to wake up. Also, as of June 15, 2026, Agent SDK usage on a
-Claude subscription draws from a separate monthly Agent SDK allowance rather than your interactive
-Claude Code limit.
+```
+CLAUDE_CODE_OAUTH_TOKEN=your-token
+```
 
-### Client on Vercel
+The server loads this on startup, so you do not have to export it in every shell. The file is
+gitignored and never leaves your machine.
 
-1. Import the repo into Vercel. The included `vercel.json` builds the client workspace and serves
-   `client/dist`.
-2. In the Vercel project settings, add two build-time environment variables:
-   - `VITE_API_URL` set to your Render URL (so the browser calls the backend directly).
-   - `VITE_GOOGLE_CLIENT_ID` if you want Google Slides (the same value you use locally).
-3. Deploy. Open the Vercel URL and the app will talk to your Render backend.
+### 2. Run the server and open a tunnel
 
-If you connect Google Slides in production, remember to add your Vercel URL as an authorized
-JavaScript origin on the OAuth client, the same way you added http://localhost:5173 for local dev.
+```bash
+npm run dev -w server                 # listens on http://localhost:8787
+npm run tunnel                        # second terminal, prints a public https URL
+```
+
+`npm run tunnel` needs cloudflared installed once (`brew install cloudflared` on a Mac). It prints
+a URL like `https://something-random.trycloudflare.com` that forwards straight to your local
+server. This quick-tunnel URL changes every time you start it, so grab the current one each session.
+
+The script forces the `http2` protocol because many networks (school and office Wi-Fi especially)
+block the QUIC/UDP traffic cloudflared uses by default. If even that fails to connect, the network
+is likely blocking cloudflared's port 7844 entirely, in which case ngrok (which runs over the
+normal HTTPS port 443) is a more reliable free alternative.
+
+### 3. Point the client at the tunnel
+
+For the hosted client, set `VITE_API_URL` to the tunnel URL in your Vercel project settings (plus
+`VITE_GOOGLE_CLIENT_ID` if you want Slides), then redeploy. To test the whole thing locally
+instead, put the same `VITE_API_URL` in `client/.env` and run `npm run dev`.
+
+If you would rather not depend on your machine being on, the same server runs on any always-on
+host. `render.yaml` is included for Render if you ever want a hosted box (it asks for a card,
+though); the only change is that you set `CLAUDE_CODE_OAUTH_TOKEN` in that host's dashboard instead
+of in `server/.env`.
 
 ## Project layout
 
@@ -104,4 +113,5 @@ deal with CORS.
 | `npm run typecheck` | Type-check without emitting           |
 | `npm run lint`      | Lint with ESLint                      |
 | `npm run format`    | Format with Prettier                  |
->>>>>>> Stashed changes
+
+(Thanks Claude for helping make this!)
