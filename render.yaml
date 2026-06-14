@@ -1,0 +1,17 @@
+# Render blueprint for the AirDeck backend (the Agent SDK speaker-note + TTS service).
+# This is the half that CANNOT run on Vercel, because the Agent SDK spawns the Claude Code
+# CLI as a subprocess and needs a persistent, writable Node process.
+#
+# After the service is created, set CLAUDE_CODE_OAUTH_TOKEN in the Render dashboard (mint it
+# locally with `claude setup-token`). Render injects PORT automatically; the server reads it.
+services:
+  - type: web
+    name: airdeck-server
+    runtime: node
+    plan: free # note: the free plan sleeps when idle, so the first cue after a pause is slow
+    buildCommand: npm install && npm run build -w server
+    startCommand: npm run start -w server
+    healthCheckPath: /api/health
+    envVars:
+      - key: CLAUDE_CODE_OAUTH_TOKEN
+        sync: false # set this secret in the dashboard, never commit it

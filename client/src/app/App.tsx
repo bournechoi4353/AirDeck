@@ -18,6 +18,7 @@ import {
   type SlideChangeEvent,
 } from '../slides';
 import { VoicePicker, useTTS } from '../audio';
+import { apiUrl } from '../api';
 import { Landing } from './Landing';
 
 type Health = { status: string; service: string; time: string };
@@ -73,7 +74,7 @@ export function App() {
   }, [slideEvent, speak, presenting]);
 
   useEffect(() => {
-    fetch('/api/health')
+    fetch(apiUrl('/api/health'))
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

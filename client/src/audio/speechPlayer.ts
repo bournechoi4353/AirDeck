@@ -1,3 +1,5 @@
+import { apiUrl } from '../api';
+
 export type TtsVoice = { id: string; label: string };
 
 // Natural macOS voices (synthesized server-side via `say`; see /api/tts). On non-macOS hosts the
@@ -50,7 +52,7 @@ export class SpeechPlayer {
     const id = ++this.reqId;
     this.stopCurrent();
     try {
-      const res = await fetch('/api/tts', {
+      const res = await fetch(apiUrl('/api/tts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice: this.voiceId }),

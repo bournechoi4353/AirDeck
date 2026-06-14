@@ -1,3 +1,4 @@
+import { apiUrl } from '../api';
 import type { Slide, Deck } from './types.js';
 
 // The cue service only needs slide text. Strip the (large, base64) rendered page images before
@@ -22,7 +23,7 @@ export function connectCueStream(
   const slimDeck: Deck = { id: deck.id, title: deck.title, slides: deck.slides.map(textOnly) };
 
   const run = async () => {
-    const res = await fetch('/api/cue/stream', {
+    const res = await fetch(apiUrl('/api/cue/stream'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deckId, slideIndex, slide: textOnly(slide), deck: slimDeck }),
