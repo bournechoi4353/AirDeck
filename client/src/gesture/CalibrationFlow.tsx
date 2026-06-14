@@ -50,7 +50,7 @@ export function CalibrationFlow({
         {status === 'error' && <p style={{ color: 'crimson' }}>error: {error}</p>}
         {status === 'running' && step !== 'done' && (
           <p style={{ fontSize: 13, color: handDetected ? '#0a7' : '#a40' }}>
-            {handDetected ? `hand detected · ${samples} samples` : 'no hand detected — show your hand'}
+            {handDetected ? `hand detected · ${samples} samples` : 'no hand detected. Show your hand'}
           </p>
         )}
 

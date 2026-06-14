@@ -18,11 +18,14 @@ import {
   type SlideChangeEvent,
 } from '../slides';
 import { VoicePicker, useTTS } from '../audio';
+import { Landing } from './Landing';
 
 type Health = { status: string; service: string; time: string };
 type Mode = 'present' | 'calibrate';
+type View = 'landing' | 'app';
 
 export function App() {
+  const [view, setView] = useState<View>('landing');
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('present');
@@ -40,7 +43,22 @@ export function App() {
   const activeDeckRef = useRef(activeDeck);
   activeDeckRef.current = activeDeck;
 
+  // Only generate/speak cues while actually presenting, and skip the slide that's already on
+  // screen when present mode opens, otherwise the deck's mount-time slide-change event would
+  // make the voice speak the moment the website (still on the landing page) loads.
+  const presenting = view === 'app' && mode === 'present';
+  const armedRef = useRef(false);
+
   useEffect(() => {
+    if (!presenting) {
+      armedRef.current = false;
+      return;
+    }
+    // First run after entering present mode just arms the effect for the current slide.
+    if (!armedRef.current) {
+      armedRef.current = true;
+      return;
+    }
     if (!slideEvent) return;
     let cueText = '';
     const cleanup = connectCueStream(
@@ -52,7 +70,7 @@ export function App() {
       () => { if (cueText.trim()) speak(cueText); },
     );
     return cleanup;
-  }, [slideEvent, speak]);
+  }, [slideEvent, speak, presenting]);
 
   useEffect(() => {
     fetch('/api/health')
@@ -69,103 +87,132 @@ export function App() {
     deck.handleGesture(event);
   };
 
+  if (view === 'landing') {
+    return (
+      <div className="app-shell">
+        <Landing onLaunch={() => setView('app')} />
+      </div>
+    );
+  }
+
+  const backendStatus = health ? 'ok' : healthError ? 'bad' : '';
+  const backendLabel = health
+    ? `backend online`
+    : healthError
+      ? 'backend offline'
+      : 'checking backend…';
+
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', lineHeight: 1.5, maxWidth: 820 }}>
-      <h1>AirDeck</h1>
-      <p>Webcam-only presentation copilot. Phase 4 — Google Slides + gesture-driven deck.</p>
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand">AirDeck</div>
+        <div className="right">
+          <span className={`status-dot ${backendStatus}`}>
+            <i />
+            {backendLabel}
+          </span>
+          <button onClick={() => setView('landing')}>Home</button>
+        </div>
+      </header>
 
       {mode === 'calibrate' ? (
-        <section>
-          <h2>Calibrate</h2>
-          <CalibrationFlow
-            onComplete={(p) => {
-              setProfile(p);
-              setMode('present');
-            }}
-            onCancel={() => setMode('present')}
-          />
-        </section>
-      ) : (
-        <>
-          <section>
-            <h2>Present</h2>
-            <GoogleConnect google={google} />
-            <DeckViewer
-              title={activeDeck.title}
-              current={deck.current}
-              total={deck.total}
-              slide={deck.slide}
-              onPrev={deck.prev}
-              onNext={deck.next}
+        <div className="workspace" style={{ gridTemplateColumns: '1fr' }}>
+          <section className="card">
+            <h2 className="card-title">
+              Calibrate gestures
+              <span className="tag">setup</span>
+            </h2>
+            <CalibrationFlow
+              onComplete={(p) => {
+                setProfile(p);
+                setMode('present');
+              }}
+              onCancel={() => setMode('present')}
             />
-            <p style={{ fontSize: 13, color: '#555', marginTop: 8 }}>
-              Speaker notes (placeholder until Phase 5):{' '}
-              <em>{deck.slide.notes ?? deck.slide.text}</em>
-            </p>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, color: '#555' }}>Cue voice:</span>
-              <VoicePicker player={player} />
-              <button onClick={() => speak('AirDeck voice test — you should hear this.')}>
-                Test voice
-              </button>
-              {isSpeaking && <span style={{ fontSize: 12, color: '#888' }}>speaking…</span>}
-            </div>
-            {slideEvent && (
-              <p style={{ fontSize: 12, color: '#777', margin: '4px 0 0' }}>
-                slide #{slideEvent.index + 1} — “{slideEvent.slide.title}”
-              </p>
-            )}
           </section>
-
-          <section>
-            <h2>Camera &amp; gestures</h2>
-            <div style={{ width: 320 }}>
-              <HandTrackingView options={{ fsmConfig, onGesture: handleGesture }} />
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button onClick={() => setMode('calibrate')}>Calibrate gestures</button>
-              <button
-                onClick={() => {
-                  clearCalibration();
-                  setProfile(loadCalibration());
-                }}
-              >
-                Reset calibration
-              </button>
-              <span style={{ fontSize: 12, color: '#555' }}>
-                hand: {profile.handedness ?? 'auto'} · index finger → prev · pinky finger → next
-              </span>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <strong>Gesture log</strong>
-              {log.length === 0 ? (
-                <p style={{ fontSize: 13, color: '#555' }}>raise your index finger to go back, pinky to go forward…</p>
-              ) : (
-                <ul style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, paddingLeft: 18 }}>
-                  {log.map((g, i) => (
-                    <li key={`${g.timestamp}-${i}`}>
-                      {g.type} @ {Math.round(g.timestamp)}ms
-                    </li>
-                  ))}
-                </ul>
+        </div>
+      ) : (
+        <div className="workspace">
+          <div className="col">
+            <section className="card">
+              <h2 className="card-title">
+                Present
+                <span className="tag">live deck</span>
+              </h2>
+              <GoogleConnect google={google} />
+              <DeckViewer
+                title={activeDeck.title}
+                current={deck.current}
+                total={deck.total}
+                slide={deck.slide}
+                onPrev={deck.prev}
+                onNext={deck.next}
+              />
+              <div className="cue-box">
+                <div className="label">Speaker cue</div>
+                <div className="text">{deck.slide.notes ?? deck.slide.text}</div>
+              </div>
+              <div className="toolbar" style={{ marginTop: 14 }}>
+                <span className="muted">Cue voice:</span>
+                <VoicePicker player={player} />
+                <button onClick={() => speak('AirDeck voice test. You should hear this.')}>
+                  Test voice
+                </button>
+                {isSpeaking && <span className="muted">speaking…</span>}
+              </div>
+              {slideEvent && (
+                <p className="muted" style={{ margin: '10px 0 0' }}>
+                  slide #{slideEvent.index + 1} · “{slideEvent.slide.title}”
+                </p>
               )}
-            </div>
-          </section>
-        </>
-      )}
+            </section>
+          </div>
 
-      <section>
-        <h2>Backend status</h2>
-        {health && (
-          <p style={{ color: 'green' }}>
-            ✓ {health.service}: {health.status} ({health.time})
-          </p>
-        )}
-        {healthError && <p style={{ color: 'crimson' }}>✗ cannot reach backend: {healthError}</p>}
-        {!health && !healthError && <p>checking…</p>}
-      </section>
-    </main>
+          <div className="col">
+            <section className="card">
+              <h2 className="card-title">
+                Camera &amp; gestures
+                <span className="tag">{profile.handedness ?? 'auto'} hand</span>
+              </h2>
+              <HandTrackingView options={{ fsmConfig, onGesture: handleGesture }} />
+
+              <div className="toolbar" style={{ marginTop: 14 }}>
+                <button className="btn-primary" onClick={() => setMode('calibrate')}>
+                  Calibrate
+                </button>
+                <button
+                  onClick={() => {
+                    clearCalibration();
+                    setProfile(loadCalibration());
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+              <p className="muted" style={{ marginTop: 10 }}>
+                index finger → prev · pinky finger → next
+              </p>
+
+              <div style={{ marginTop: 16 }}>
+                <strong style={{ fontSize: 13 }}>Gesture log</strong>
+                {log.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 6 }}>
+                    raise your index finger to go back, pinky to go forward…
+                  </p>
+                ) : (
+                  <ul className="log-list">
+                    {log.map((g, i) => (
+                      <li key={`${g.timestamp}-${i}`}>
+                        {g.type} @ {Math.round(g.timestamp)}ms
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

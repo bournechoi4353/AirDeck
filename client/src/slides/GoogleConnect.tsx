@@ -1,6 +1,6 @@
 import type { UseGoogleDeck } from './useGoogleDeck';
 
-// Presentational connect panel — all state lives in the useGoogleDeck hook passed in.
+// Presentational connect panel: all state lives in the useGoogleDeck hook passed in.
 export function GoogleConnect({ google }: { google: UseGoogleDeck }) {
   const { configured, status, error, presentations, deck, connect, choose, reset } = google;
 

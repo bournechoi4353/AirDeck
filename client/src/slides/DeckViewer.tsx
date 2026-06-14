@@ -26,8 +26,7 @@ export function DeckViewer({
           maxWidth: 720,
           aspectRatio: '16 / 9',
           overflow: 'hidden',
-          borderRadius: 10,
-          border: '1px solid #ddd',
+          border: '1px solid #0a0a0a',
           background: '#fff',
         }}
       >
@@ -48,7 +47,7 @@ export function DeckViewer({
               flexDirection: 'column',
               justifyContent: 'center',
               gap: 16,
-              background: 'linear-gradient(135deg, #0f172a, #1e293b)',
+              background: '#0a0a0a',
               color: '#f8fafc',
             }}
           >
@@ -65,10 +64,9 @@ export function DeckViewer({
             bottom: 8,
             right: 10,
             padding: '2px 8px',
-            borderRadius: 6,
-            background: 'rgba(0, 0, 0, 0.55)',
+            background: 'rgba(0, 0, 0, 0.7)',
             color: '#fff',
-            font: '12px system-ui, sans-serif',
+            font: '12px ui-monospace, monospace',
           }}
         >
           {current + 1} / {total}

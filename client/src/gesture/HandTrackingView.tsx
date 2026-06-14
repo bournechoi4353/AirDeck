@@ -13,7 +13,7 @@ export function HandTrackingView({ options }: { options?: UseHandTrackingOptions
         ref={videoRef}
         playsInline
         muted
-        style={{ width: '100%', display: 'block', transform: MIRROR, borderRadius: 8, background: '#000' }}
+        style={{ width: '100%', display: 'block', transform: MIRROR, border: '1px solid #0a0a0a', background: '#000' }}
       />
       <canvas
         ref={canvasRef}
@@ -32,10 +32,9 @@ export function HandTrackingView({ options }: { options?: UseHandTrackingOptions
           top: 8,
           left: 8,
           padding: '2px 8px',
-          borderRadius: 6,
-          background: 'rgba(0, 0, 0, 0.6)',
+          background: 'rgba(0, 0, 0, 0.7)',
           color: '#fff',
-          font: '12px system-ui, sans-serif',
+          font: '12px ui-monospace, monospace',
         }}
       >
         {status === 'loading' && 'loading model + camera…'}
@@ -49,10 +48,9 @@ export function HandTrackingView({ options }: { options?: UseHandTrackingOptions
             bottom: 8,
             left: 8,
             padding: '2px 8px',
-            borderRadius: 6,
-            background: 'rgba(16, 185, 129, 0.85)',
+            background: '#047857',
             color: '#fff',
-            font: '12px system-ui, sans-serif',
+            font: '12px ui-monospace, monospace',
           }}
         >
           ✋ {lastGesture.type}
